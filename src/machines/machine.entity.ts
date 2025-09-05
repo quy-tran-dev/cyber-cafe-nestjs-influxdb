@@ -1,7 +1,7 @@
 export interface Machine {
-  id: string;
-  zone: string;
-  status: 'idle' | 'running' | 'stopped' | 'playing' | 'downloading';
-  game?: string;
-  file?: string;
+  hostname: string;
+  location: string;
+  os: string;
+  status: string;
 }
+  // { hostname: 'PC-01', location: 'Zone-A', os: 'Windows 10', status: 'inactive' },

@@ -1,54 +1,101 @@
-import { Injectable } from '@nestjs/common';
-import { Machine } from './machine.entity';
-import { seedMachines } from './seed';
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { InfluxDB, QueryApi, Point } from "@influxdata/influxdb-client";
 
 @Injectable()
 export class MachinesService {
-  private machines: Machine[] = [];
+  private readonly logger = new Logger(MachinesService.name);
+  private writeApi;
+  private queryApi;
 
   constructor() {
-    this.machines = seedMachines();
+    const influx = new InfluxDB({
+      url: process.env.INFLUX_URL!,
+      token: process.env.INFLUX_TOKEN!,
+    });
+
+    this.writeApi = influx.getWriteApi(
+      process.env.INFLUX_ORG!,
+      process.env.INFLUX_BUCKET!,
+    );
+    this.queryApi = influx.getQueryApi(process.env.INFLUX_ORG!);
   }
 
-  getAll() {
-    return this.machines;
+  async getMachines(): Promise<any[]> {
+    const query = `
+      from(bucket: "${process.env.INFLUX_BUCKET}")
+        |> range(start: -30d)
+        |> filter(fn: (r) => r._measurement == "machines")
+        |> last()
+    `;
+
+    const machines: Record<string, any> = {};
+
+    return new Promise((resolve, reject) => {
+      this.queryApi.queryRows(query, {
+        next: (row, tableMeta) => {
+          const o = tableMeta.toObject(row);
+
+          const key = o.hostname;
+          if (!machines[key]) {
+            machines[key] = {
+              hostname: o.hostname,
+              location: o.location,
+              os: o.os,
+              status: o._value,
+            };
+          }
+        },
+        error: (err) => {
+          this.logger.error(`Query error: ${err}`);
+          reject(err);
+        },
+        complete: () => {
+          resolve(Object.values(machines));
+        },
+      });
+    });
   }
 
-  getById(id: string) {
-    return this.machines.find((m) => m.id === id);
-  }
+  async findMachineByHostname(hostname: string) {
+    const query = `
+    from(bucket: "${process.env.INFLUX_BUCKET}")
+      |> range(start: -30d)
+      |> filter(fn: (r) => r._measurement == "machines" and r.hostname == "${hostname}")
+      |> last()
+  `;
+    const result = await this.queryApi.collectRows(query);
 
-  startMachine(id: string) {
-    const machine = this.getById(id);
-    if (machine) {
-      machine.status = 'running';
+    if (result.length === 0) {
+      return null;
     }
-    return { id, message: `Machine ${id} started` };
+
+    return {
+      hostname,
+      location: result[0].location,
+      os: result[0].os,
+      status: result[0]._value,
+    };
   }
 
-  stopMachine(id: string) {
-    const machine = this.getById(id);
-    if (machine) {
-      machine.status = 'stopped';
-    }
-    return { id, message: `Machine ${id} stopped` };
-  }
+  async updateMachineStatus(
+    hostname: string,
+    status: "active" | "inactive" | "maintenance",
+  ) {
+    const machine = await this.findMachineByHostname(hostname);
 
-  playGame(id: string, game: string) {
-    const machine = this.getById(id);
-    if (machine) {
-      machine.status = 'playing';
-      machine.game = game;
+    if (!machine) {
+      throw new NotFoundException(`Machine ${hostname} not found`);
     }
-    return { id, message: `Machine ${id} is playing ${game}` };
-  }
 
-  download(id: string, file: string) {
-    const machine = this.getById(id);
-    if (machine) {
-      machine.status = 'downloading';
-      machine.file = file;
-    }
-    return { id, message: `Machine ${id} downloading ${file}` };
+    const point = new Point("machines")
+      .tag("hostname", machine.hostname)
+      .tag("location", machine.location)
+      .tag("os", machine.os)
+      .stringField("status", status);
+
+    this.writeApi.writePoint(point);
+    await this.writeApi.flush();
+
+    return { message: `Updated ${hostname} to ${status}` };
   }
 }
