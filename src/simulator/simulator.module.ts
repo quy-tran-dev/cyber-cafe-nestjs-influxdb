@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { SimulatorController } from './simulator.controller';
-import { SimulatorService } from './simulator.service';
+import { Module } from "@nestjs/common";
+import { SimulationController } from "./simulator.controller";
+import { SimulationService } from "./simulator.service";
 
 @Module({
-  controllers: [SimulatorController],
-  providers: [SimulatorService],
+  controllers: [SimulationController],
+  providers: [SimulationService],
 })
 export class SimulatorModule {}

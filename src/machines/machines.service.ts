@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InfluxDB, QueryApi, Point } from "@influxdata/influxdb-client";
+import { SimulationService } from "src/simulator/simulator.service";
 
 @Injectable()
 export class MachinesService {
@@ -7,7 +8,7 @@ export class MachinesService {
   private writeApi;
   private queryApi;
 
-  constructor() {
+  constructor(private readonly simService: SimulationService) {
     const influx = new InfluxDB({
       url: process.env.INFLUX_URL!,
       token: process.env.INFLUX_TOKEN!,
@@ -80,6 +81,7 @@ export class MachinesService {
   async updateMachineStatus(
     hostname: string,
     status: "active" | "inactive" | "maintenance",
+    user_id?: string,
   ) {
     const machine = await this.findMachineByHostname(hostname);
 
@@ -93,9 +95,20 @@ export class MachinesService {
       .tag("os", machine.os)
       .stringField("status", status);
 
+    if (user_id) {
+      point.tag("user_id", user_id);
+    }
+
     this.writeApi.writePoint(point);
     await this.writeApi.flush();
 
+    if (status === "active") {
+      this.simService.start(hostname, user_id ?? "guest", "normal");
+    } else if (status === "inactive") {
+      this.simService.stop(hostname);
+    }
+
     return { message: `Updated ${hostname} to ${status}` };
   }
+
 }

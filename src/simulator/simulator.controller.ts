@@ -1,12 +1,22 @@
-import { Controller, Post, Body } from '@nestjs/common';
-import { SimulatorService } from './simulator.service';
+import { Controller, Post, Body } from "@nestjs/common";
+import { SimulationService } from "./simulator.service";
 
-@Controller('simulate')
-export class SimulatorController {
-  constructor(private readonly simulatorService: SimulatorService) {}
+@Controller("simulation")
+export class SimulationController {
+  constructor(private readonly simService: SimulationService) {}
 
-  @Post('action')
-  async simulate(@Body() body: { hostname: string; action: string }) {
-    return this.simulatorService.simulateAction(body.hostname, body.action);
+  @Post("start")
+  start(@Body() body: { hostname: string; user_id: string; mode?: any }) {
+    return this.simService.start(body.hostname, body.user_id, body.mode);
+  }
+
+  @Post("change-mode")
+  changeMode(@Body() body: { hostname: string; mode: any }) {
+    return this.simService.changeMode(body.hostname, body.mode);
+  }
+
+  @Post("stop")
+  stop(@Body() body: { hostname: string }) {
+    return this.simService.stop(body.hostname);
   }
 }
