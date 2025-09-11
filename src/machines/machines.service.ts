@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InfluxDB, QueryApi, Point } from "@influxdata/influxdb-client";
 import { SimulationService } from "src/simulation/simulation.service";
 import { MachineRecord } from "src/common/measurement/machine/machine.record";
+import { Mode } from "src/common/measurement/system-metrics/mode.type";
 
 @Injectable()
 export class MachinesService {
@@ -106,10 +107,10 @@ export class MachinesService {
     return { message: `Updated ${hostname} to ${status}` };
   }
 
-  async changeSimulationMode(hostname: string, mode: string) {
+  async changeSimulationMode(hostname: string, mode: Mode) {
     const machine = await this.findMachineByHostname(hostname);
     if (!machine) throw new NotFoundException(`Machine ${hostname} not found`);
 
-    return this.simService.changeMode(hostname, mode as any);
+    return this.simService.changeMode(hostname, mode, machine);
   }
 }
