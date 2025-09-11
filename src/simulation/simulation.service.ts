@@ -66,9 +66,9 @@ export class SimulationService {
     throw new Error(`${machine.hostname} is not running simulation`);
   }
 
-  changeMode(hostname: string, mode: Mode) {
+  changeMode(hostname: string, mode: Mode, updatedMachine: MachineRecord) {
     if (!this.intervals.has(hostname)) {
-      throw new Error(`${hostname} is not running simulation`);
+      this.start(updatedMachine, "normal");
     }
     this.modes.set(hostname, mode);
     log(`Changed ${hostname} to mode ${mode}`);
@@ -113,50 +113,50 @@ export class SimulationService {
     switch (mode) {
       case "normal":
         return {
-          cpu: this.rand(20, 50),
-          ram: this.rand(30, 60),
-          gpu: this.rand(20, 40),
-          disk: this.rand(30, 80),
-          net: this.rand(100, 300),
+          cpu: this.rand(20, 50),// %
+          ram: this.rand(30, 60),// %
+          gpu: this.rand(20, 30),// %
+          disk: this.rand(30, 40),// %
+          net: this.rand(200, 300),// Mbps
         };
       case "network_lag":
         return {
-          cpu: this.rand(20, 40),
-          ram: this.rand(30, 50),
+          cpu: this.rand(30, 50),
+          ram: this.rand(30, 60),
           gpu: this.rand(20, 40),
           disk: this.rand(30, 70),
-          net: this.rand(5, 100),
+          net: this.rand(5, 20),
         };
       case "machine_lag":
         return {
           cpu: this.rand(70, 95),
           ram: this.rand(70, 95),
-          gpu: this.rand(60, 90),
-          disk: this.rand(200, 300),
-          net: this.rand(50, 200),
+          gpu: this.rand(40, 50),
+          disk: this.rand(70, 90),
+          net: this.rand(100, 200),
         };
       case "multi_task":
         return {
-          cpu: this.rand(40, 70),
-          ram: this.rand(80, 95),
-          gpu: this.rand(30, 50),
-          disk: this.rand(100, 200),
+          cpu: this.rand(50, 70),
+          ram: this.rand(70, 90),
+          gpu: this.rand(40, 60),
+          disk: this.rand(50, 70),
           net: this.rand(200, 400),
         };
       case "high_graphics":
         return {
-          cpu: this.rand(60, 90),
-          ram: this.rand(50, 80),
+          cpu: this.rand(70, 90),
+          ram: this.rand(70, 90),
           gpu: this.rand(80, 95),
-          disk: this.rand(100, 250),
+          disk: this.rand(50, 80),
           net: this.rand(300, 600),
         };
       case "crash":
-        return { cpu: 100, ram: 100, gpu: 100, disk: 500, net: 1000 };
+        return { cpu: 100, ram: 100, gpu: 100, disk: 100, net: 1000 };
     }
   }
 
   private rand(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    return Math.floor(Math.random() * (max - min)) + min;
   }
 }
