@@ -24,6 +24,7 @@ export class SystemMetricsService {
     metrics: {
       cpu_usage: number;
       ram_usage: number;
+      gpu: number;
       disk_io: number;
       network_io: number;
     },
@@ -33,6 +34,7 @@ export class SystemMetricsService {
       .tag('user_id', user_id)
       .floatField('cpu_usage', metrics.cpu_usage)
       .floatField('ram_usage', metrics.ram_usage)
+      .floatField("gpu_usage", metrics.gpu)
       .floatField('disk_io', metrics.disk_io)
       .floatField('network_io', metrics.network_io);
 

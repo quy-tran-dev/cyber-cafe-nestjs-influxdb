@@ -14,6 +14,7 @@ export class SystemMetricsController {
       cpu_usage: number;
       ram_usage: number;
       disk_io: number;
+      gpu: number;
       network_io: number;
     },
   ) {
@@ -21,6 +22,7 @@ export class SystemMetricsController {
       cpu_usage: body.cpu_usage,
       ram_usage: body.ram_usage,
       disk_io: body.disk_io,
+      gpu: body.gpu,
       network_io: body.network_io,
     });
   }

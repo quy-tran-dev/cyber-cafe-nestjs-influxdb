@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InfluxDB, QueryApi, Point } from "@influxdata/influxdb-client";
-import { SimulationService } from "src/simulator/simulator.service";
+import { SimulationService } from "src/simulation/simulation.service";
+import { MachineRecord } from "src/common/measurement/machine/machine.record";
 
 @Injectable()
 export class MachinesService {
@@ -21,7 +22,7 @@ export class MachinesService {
     this.queryApi = influx.getQueryApi(process.env.INFLUX_ORG!);
   }
 
-  async getMachines(): Promise<any[]> {
+  async getMachines(): Promise<MachineRecord[]> {
     const query = `
       from(bucket: "${process.env.INFLUX_BUCKET}")
         |> range(start: -30d)
@@ -29,51 +30,45 @@ export class MachinesService {
         |> last()
     `;
 
-    const machines: Record<string, any> = {};
+    const machines: Record<string, MachineRecord> = {};
 
     return new Promise((resolve, reject) => {
       this.queryApi.queryRows(query, {
         next: (row, tableMeta) => {
           const o = tableMeta.toObject(row);
-
-          const key = o.hostname;
-          if (!machines[key]) {
-            machines[key] = {
-              hostname: o.hostname,
-              location: o.location,
-              os: o.os,
-              status: o._value,
-            };
-          }
+          machines[o.hostname] = {
+            hostname: o.hostname,
+            os: o.os,
+            location: o.location,
+            user_id: o.user_id,
+            status: o._value,
+          };
         },
         error: (err) => {
           this.logger.error(`Query error: ${err}`);
           reject(err);
         },
-        complete: () => {
-          resolve(Object.values(machines));
-        },
+        complete: () => resolve(Object.values(machines)),
       });
     });
   }
 
-  async findMachineByHostname(hostname: string) {
+  async findMachineByHostname(hostname: string): Promise<MachineRecord | null> {
     const query = `
-    from(bucket: "${process.env.INFLUX_BUCKET}")
-      |> range(start: -30d)
-      |> filter(fn: (r) => r._measurement == "machines" and r.hostname == "${hostname}")
-      |> last()
-  `;
+      from(bucket: "${process.env.INFLUX_BUCKET}")
+        |> range(start: -30d)
+        |> filter(fn: (r) => r._measurement == "machines" and r.hostname == "${hostname}")
+        |> last()
+    `;
     const result = await this.queryApi.collectRows(query);
 
-    if (result.length === 0) {
-      return null;
-    }
+    if (result.length === 0) return null;
 
     return {
       hostname,
-      location: result[0].location,
       os: result[0].os,
+      location: result[0].location,
+      user_id: result[0].user_id,
       status: result[0]._value,
     };
   }
@@ -84,31 +79,37 @@ export class MachinesService {
     user_id?: string,
   ) {
     const machine = await this.findMachineByHostname(hostname);
+    if (!machine) throw new NotFoundException(`Machine ${hostname} not found`);
 
-    if (!machine) {
-      throw new NotFoundException(`Machine ${hostname} not found`);
-    }
+    const updatedMachine: MachineRecord = {
+      ...machine,
+      status,
+      user_id: user_id ?? machine.user_id,
+    };
 
     const point = new Point("machines")
-      .tag("hostname", machine.hostname)
-      .tag("location", machine.location)
-      .tag("os", machine.os)
+      .tag("hostname", updatedMachine.hostname)
+      .tag("os", updatedMachine.os)
+      .tag("location", updatedMachine.location)
+      .tag("user_id", updatedMachine.user_id)
       .stringField("status", status);
-
-    if (user_id) {
-      point.tag("user_id", user_id);
-    }
 
     this.writeApi.writePoint(point);
     await this.writeApi.flush();
 
     if (status === "active") {
-      this.simService.start(hostname, user_id ?? "guest", "normal");
+      this.simService.start(updatedMachine, "normal");
     } else if (status === "inactive") {
-      this.simService.stop(hostname);
+      this.simService.stop(updatedMachine);
     }
 
     return { message: `Updated ${hostname} to ${status}` };
   }
 
+  async changeSimulationMode(hostname: string, mode: string) {
+    const machine = await this.findMachineByHostname(hostname);
+    if (!machine) throw new NotFoundException(`Machine ${hostname} not found`);
+
+    return this.simService.changeMode(hostname, mode as any);
+  }
 }
