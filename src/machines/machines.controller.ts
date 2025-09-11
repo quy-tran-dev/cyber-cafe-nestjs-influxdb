@@ -1,27 +1,35 @@
-import { Controller, Get, Param, Post } from "@nestjs/common";
+import { Controller, Get, Param, Patch, Body, Query } from "@nestjs/common";
 import { MachinesService } from "./machines.service";
+import { Mode } from "src/common/measurement/system-metrics/mode.type";
 
 @Controller("machines")
 export class MachinesController {
   constructor(private readonly machinesService: MachinesService) {}
 
   @Get()
-  async findAll() {
+  async getMachines() {
     return this.machinesService.getMachines();
   }
 
-  @Post(":id/start")
-  async start(@Param("id") hostname: string) {
-    return this.machinesService.updateMachineStatus(hostname, "active");
+  @Get(":hostname")
+  async getMachine(@Param("hostname") hostname: string) {
+    return this.machinesService.findMachineByHostname(hostname);
   }
 
-  @Post(":id/stop")
-  async stop(@Param("id") hostname: string) {
-    return this.machinesService.updateMachineStatus(hostname, "inactive");
+  @Patch(":hostname/status")
+  async updateStatus(
+    @Param("hostname") hostname: string,
+    @Body("status") status: "active" | "inactive" | "maintenance",
+    @Body("user_id") userId?: string,
+  ) {
+    return this.machinesService.updateMachineStatus(hostname, status, userId);
   }
 
-  @Post(":id/maintenance")
-  async maintenance(@Param("id") hostname: string) {
-    return this.machinesService.updateMachineStatus(hostname, "maintenance");
+  @Patch(":hostname/mode")
+  async updateMode(
+    @Param("hostname") hostname: string,
+    @Body("mode") mode: Mode,
+  ) {
+    return this.machinesService.changeSimulationMode(hostname, mode);
   }
 }
