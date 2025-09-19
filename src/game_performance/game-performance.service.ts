@@ -1,4 +1,3 @@
-// src/game-performance/game-performance.service.ts
 import { Injectable, Logger } from "@nestjs/common";
 import { InfluxDB, Point } from "@influxdata/influxdb-client";
 import { GameMode } from "src/common/measurement/game_performance/game-performance.mode";
