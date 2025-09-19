@@ -3,6 +3,7 @@ import { InfluxDB, QueryApi, Point } from "@influxdata/influxdb-client";
 import { SimulationService } from "src/simulation/simulation.service";
 import { MachineRecord } from "src/common/measurement/machine/machine.record";
 import { Mode } from "src/common/measurement/system-metrics/mode.type";
+import { GameMode } from "src/common/measurement/game_performance/game-performance.mode";
 
 @Injectable()
 export class MachinesService {
@@ -107,10 +108,10 @@ export class MachinesService {
     return { message: `Updated ${hostname} to ${status}` };
   }
 
-  async changeSimulationMode(hostname: string, mode: Mode) {
+  async changeSimulationMode(hostname: string, systemMode: Mode, gameMode: GameMode) {
     const machine = await this.findMachineByHostname(hostname);
     if (!machine) throw new NotFoundException(`Machine ${hostname} not found`);
 
-    return this.simService.changeMode(hostname, mode, machine);
+    return this.simService.changeMode(hostname, systemMode, gameMode, machine);
   }
 }

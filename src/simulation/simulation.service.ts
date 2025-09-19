@@ -5,17 +5,23 @@ import { SystemMetricsRecord } from "src/common/measurement/system-metrics/syste
 import { SystemMetricsField } from "src/common/measurement/system-metrics/system-metrics.field";
 import { Mode } from "src/common/measurement/system-metrics/mode.type";
 import { log } from "console";
+import { SystemMetricsService } from "src/system-metrics/system-metrics.service";
+import { GamePerformanceService } from "src/game_performance/game-performance.service";
+import { GameMode } from "src/common/measurement/game_performance/game-performance.mode";
 
 @Injectable()
 export class SimulationService {
   private readonly logger = new Logger(SimulationService.name);
   private intervals: Map<string, NodeJS.Timeout> = new Map();
-  private modes: Map<string, Mode> = new Map();
+  private systemModes: Map<string, Mode> = new Map();
+  private gameModes: Map<string, GameMode> = new Map();
 
   private influx: InfluxDB;
   private writeApi;
 
-  constructor() {
+  constructor(
+    private readonly gamePerformanceService: GamePerformanceService,
+  ) {
     this.influx = new InfluxDB({
       url: process.env.INFLUX_URL!,
       token: process.env.INFLUX_TOKEN!,
@@ -27,30 +33,39 @@ export class SimulationService {
     );
   }
 
-  start(machine: MachineRecord, mode: Mode = "normal") {
+  start(
+    machine: MachineRecord,
+    systemMode: Mode = "normal",
+    gameMode: GameMode = "non-play",
+  ) {
     if (this.intervals.has(machine.hostname)) {
       throw new Error(`${machine.hostname} is already running simulation`);
     }
 
-    this.modes.set(machine.hostname, mode);
+    this.systemModes.set(machine.hostname, systemMode);
+    this.gameModes.set(machine.hostname, gameMode);
 
     const interval = setInterval(() => {
-      this.runSimulationTick(machine, this.modes.get(machine.hostname)!);
+      this.runSimulationTick(
+        machine,
+        this.systemModes.get(machine.hostname)!,
+        this.gameModes.get(machine.hostname)!,
+      );
     }, 5000);
 
     this.intervals.set(machine.hostname, interval);
     return {
-      message: `Started simulation for ${machine.hostname} in mode ${mode}`,
+      message: `Started simulation for ${machine.hostname} in systemMode ${systemMode}`,
     };
   }
-
 
   stop(machine: MachineRecord) {
     const interval = this.intervals.get(machine.hostname);
     if (interval) {
       clearInterval(interval);
       this.intervals.delete(machine.hostname);
-      this.modes.delete(machine.hostname);
+      this.systemModes.delete(machine.hostname);
+      this.gameModes.delete(machine.hostname);
 
       const point = new Point("machines")
         .tag("hostname", machine.hostname)
@@ -66,17 +81,25 @@ export class SimulationService {
     throw new Error(`${machine.hostname} is not running simulation`);
   }
 
-  changeMode(hostname: string, mode: Mode, updatedMachine: MachineRecord) {
+  changeMode(hostname: string, systemMode: Mode, gameMode: GameMode, machine: MachineRecord) {
+
     if (!this.intervals.has(hostname)) {
-      this.start(updatedMachine, "normal");
+      this.start(machine, "normal", "non-play");
     }
-    this.modes.set(hostname, mode);
-    log(`Changed ${hostname} to mode ${mode}`);
-    return { message: `Changed ${hostname} to mode ${mode}` };
+
+    this.systemModes.set(hostname, systemMode);
+    this.gameModes.set(hostname, gameMode);
+
+    this.logger.log(`System mode for ${hostname} updated to ${systemMode}, Game mode for ${hostname} updated to ${gameMode}`);
+    return { message: `System mode for ${hostname} updated to ${systemMode}, Game mode for ${hostname} updated to ${gameMode}` };
   }
 
-  private runSimulationTick(machine: MachineRecord, mode: Mode) {
-    const metrics = this.generateMetrics(mode);
+  private runSimulationTick(
+    machine: MachineRecord,
+    systemMode: Mode,
+    gameMode: GameMode,
+  ) {
+    const metrics = this.generateMetrics(systemMode);
 
     if (this.checkCrash(metrics)) {
       this.logger.warn(`${machine.hostname} crashed!`);
@@ -85,9 +108,21 @@ export class SimulationService {
     }
 
     this.writeSystemMetrics(machine, metrics);
+
+    if (gameMode !== "non-play") {
+      const gameMetrics = this.gamePerformanceService.generateGamePerformance(
+        gameMode,
+        systemMode,
+      );
+      this.gamePerformanceService.writeGamePerformance(
+        machine.hostname,
+        machine.user_id,
+        gameMetrics,
+      );
+    }
   }
 
-  private writeSystemMetrics(
+   private writeSystemMetrics(
     machine: MachineRecord,
     metrics: SystemMetricsField,
   ) {
@@ -105,12 +140,12 @@ export class SimulationService {
   }
 
   private checkCrash(metrics?: SystemMetricsField): boolean {
-  if (!metrics) return false;
-  return metrics.cpu >= 100 || metrics.gpu >= 100 || metrics.ram >= 100;
-}
+    if (!metrics) return false;
+    return metrics.cpu >= 100 || metrics.gpu >= 100 || metrics.ram >= 100;
+  }
 
-  private generateMetrics(mode: Mode): SystemMetricsField {
-    switch (mode) {
+  private generateMetrics(systemMode: Mode): SystemMetricsField {
+    switch (systemMode) {
       case "normal":
         return {
           cpu: this.rand(20, 50),// %
