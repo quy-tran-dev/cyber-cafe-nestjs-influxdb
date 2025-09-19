@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InfluxDB, Point } from '@influxdata/influxdb-client';
+import { MachineRecord } from 'src/common/measurement/machine/machine.record';
+import { SystemMetricsField } from 'src/common/measurement/system-metrics/system-metrics.field';
 
 @Injectable()
 export class SystemMetricsService {
   private influx: InfluxDB;
   private writeApi;
+    private readonly logger = new Logger(SystemMetricsService.name);
+  
 
   constructor() {
     this.influx = new InfluxDB({
